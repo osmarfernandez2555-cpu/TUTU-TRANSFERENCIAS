@@ -62,9 +62,39 @@ app.get('/api/estimar', async (req, res) => {
     const page = await context.newPage();
 
     console.log('[SCRAPER] Abriendo estimador DNRPA...');
-    await page.goto('https://www2.jus.gob.ar/dnrpa-site/#!/estimador', {
-      waitUntil: 'networkidle',
-      timeout: 45000
+  await page.goto('https://www2.jus.gob.ar/dnrpa-site/#!/estimador', {
+  waitUntil: 'networkidle',
+  timeout: 45000
+});
+
+// Esperar que Angular cargue completamente
+await page.waitForTimeout(6000);
+
+// Log de todo el HTML para ver qué hay
+const htmlCompleto = await page.evaluate(() => document.body.innerHTML);
+console.log('[SCRAPER] HTML:', htmlCompleto.substring(0, 5000));
+
+// Intentar clickear opción Transferencia
+try {
+  await page.waitForSelector('input, button, a, select', { timeout: 10000 });
+  const elementosClickeables = await page.evaluate(() => {
+    const els = document.querySelectorAll('button, a, input[type="radio"], input[type="button"], li, div[ng-click], span[ng-click]');
+    return Array.from(els).map(el => ({
+      tag: el.tagName,
+      text: el.textContent?.trim().substring(0, 80),
+      id: el.id,
+      class: el.className,
+      ngClick: el.getAttribute('ng-click'),
+      href: el.getAttribute('href'),
+      visible: el.offsetParent !== null
+    })).filter(e => e.visible && e.text);
+  });
+  console.log('[SCRAPER] Elementos clickeables:', JSON.stringify(elementosClickeables, null, 2));
+} catch(e) {
+  console.log('[SCRAPER] Error buscando elementos:', e.message);
+}
+
+await page.waitForTimeout(3000); 
     });
 
     // Esperar que Angular termine de cargar
