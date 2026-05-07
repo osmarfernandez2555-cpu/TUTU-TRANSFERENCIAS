@@ -1,58 +1,111 @@
-const express = require('express');
-const { chromium } = require('playwright');
-const cors = require('cors');
-const path = require('path');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
-
-app.get('/api/estimar', async (req, res) => {
-  const patente = (req.query.patente || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (!patente) return res.status(400).json({ error: 'Falta patente' });
-
-  let browser;
-  try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
-    });
-
-    const page = await browser.newPage();
-    await page.goto('https://www2.jus.gob.ar/dnrpa-site/#!/estimador', { waitUntil: 'networkidle', timeout: 45000 });
-    await page.waitForTimeout(6000);
-
-    const html = await page.evaluate(() => document.body.innerHTML);
-    console.log('[DEBUG HTML]', html.substring(0, 5000));
-
-    const elementos = await page.evaluate(() => {
-      const els = document.querySelectorAll('button, a, input, li, div[ng-click], span[ng-click], label');
-      return Array.from(els).map(el => ({
-        tag: el.tagName,
-        text: el.textContent?.trim().substring(0, 60),
-        id: el.id,
-        ngClick: el.getAttribute('ng-click'),
-        type: el.type,
-        visible: el.offsetParent !== null
-      })).filter(e => e.visible);
-    });
-    console.log('[DEBUG ELEMENTOS]', JSON.stringify(elementos, null, 2));
-
-    await browser.close();
-    res.status(422).json({ debug: elementos.slice(0, 30) });
-
-  } catch (err) {
-    if (browser) await browser.close().catch(() => {});
-    console.error('[ERROR]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.listen(PORT, () => console.log('Servidor en puerto ' + PORT));
+Starting Container
+Servidor en puerto 8080
+                    </a>
+                    <a href="#!/" class="navbar-brand" title="Dirección Nacional de los Registros Nacionales de la Propiedad del Automotor y de Créditos Prendarios">
+                <div class="navbar-header">
+                </div>-->
+    <header>
+                    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#main-navbar-collapse">
+        <nav class="navbar navbar-top navbar-default" role="navigation">
+                        <img alt="Sistema Integral de Trámites Electrónicos - DNRPA" src="Content/img/dnrpa-azul.png" height="50">
+                        <span class="icon-bar"></span>
+                <!--<div class="navbar-header">
+                        <span class="icon-bar"></span>
+                        <h1 class="sr-only">
+                        <!--<li><a href="/poncho/docs/">Documentación</a></li>
+                        <li><a href="#!/" class="navbar-link">Inicio</a></li>
+                        <li><a href="/poncho/docs/componentes.html">Componentes</a></li>
+                        <!--<li><a href="javascript:;" class="navbar-link" ng-click="appCtrl.iniciarInformeWeb()">Informes Web</a></li>-->
+                        <!--<li><a href="javascript:;" class="navbar-link" ng-click="appCtrl.gestionarTurno()">Turnos</a></li>-->
+                        <img alt="Sistema Integral de Trámites Electrónicos - DNRPA" src="Content/img/dnrpa-azul.png" height="50">
+                        <h1 class="sr-only">
+                    </a>
+                </div>
+                <div class="collapse navbar-collapse" id="main-navbar-collapse">
+                    <ul class="nav navbar-nav navbar-right" data-smartmenus-id="1778181421094614">
+                            </ul>
+                        </li>
+                        <li><a href="/iconos">Iconos</a></li>-->
+                        <li class="dropdown">
+                </div>
+                            <a href="#" class="dropdown-toggle" data-toggle="dropdown">Ejemplos <b class="caret"></b></a>
+                            <ul class="dropdown-menu submenu" role="menu">
+            </div>
+                                <li><a href="/poncho/ejemplos/pagina.html">Página</a></li>
+        </nav>
+                                <li><a href="/poncho/ejemplos/pagina-area.html">Página de área</a></li>
+    </header>
+                                <li><a href="/poncho/ejemplos/pagina-navegacion.html">Página con navegación</a></li>
+                                <li><a href="/poncho/ejemplos/noticia.html">Noticia</a></li>
+    https://developers.google.com/recaptcha/docs/faq
+    PRD:6Ld5ZjUUAAAAAJ7zlNNbYOQ9REJyT9LeFH13N-We
+    TEST:6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
+    "tag": "A",
+    "text": "Sistema Integral de Trámites Electrónicos DNRPA",
+    RE CAPTCHA-->
+    <main role="main">
+        <div id="cuerpo" class="container">
+            <!-- ngIf: appCtrl.titulo --><h1 ng-if="appCtrl.titulo" class="ng-binding ng-scope">Estimador de costos</h1><!-- end ngIf: appCtrl.titulo -->
+            <!-- ngView: --><div ng-view="" class="ng-scope"><div class="well ng-scope">
+    <form name="estimadorCtrl.form" novalidate="" ng-submit="estimadorCtrl.submit()" class="ng-pristine ng-invalid ng-invalid-required">
+        <!--VALIDATION-->
+        <!--TRAMITE-->
+            <select id="codigoTramite" name="codigoTramite" class="form-control ng-pristine ng-untouched ng-empty ng-invalid ng-invalid-required" ng-options="item.C
+    "type": "",
+    "visible": true
+    "ngClick": null,
+  },
+  },
+  {
+    "visible": true
+    "id": "",
+  },
+    "text": "Continuar",
+    "tag": "LABEL",
+    "ngClick": null,
+    "id": "",
+    "text": "Inicio",
+  {
+    "type": "",
+    "id": "",
+    "tag": "BUTTON",
+    "ngClick": null,
+  },
+    "id": "",
+  {
+    "ngClick": null,
+    "tag": "LI",
+    "id": "",
+    "ngClick": null,
+    "type": "",
+    "text": "Ministerio de Justicia de la Nación",
+  {
+  },
+    "id": "",
+  {
+  {
+    "tag": "LI",
+    "text": "Contacto",
+    "tag": "A",
+    "type": "",
+    "id": "",
+    "text": "DNRPA",
+    "visible": true
+    "ngClick": null,
+  },
+    "type": "",
+    "visible": true
+  },
+  {
+    "text": "DNRPA",
+    "id": "",
+]
+    "id": "",
+    "ngClick": null,
+    "ngClick": null,
+    "type": "",
+    "type": "",
+    "visible": true
+  },
+  {
+    "tag": "A",
