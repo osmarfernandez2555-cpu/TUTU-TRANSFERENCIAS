@@ -68,13 +68,18 @@ app.get('/api/estimar', async (req, res) => {
     });
 
     // Esperar que Angular termine de cargar
-    await page.waitForTimeout(4000);
+    await page.waitForTimeout(8000);
 
     // Log del HTML para debug
     const pageTitle = await page.title();
     console.log('[SCRAPER] Página cargada:', pageTitle);
-
-    // Ver todos los inputs disponibles
+    
+    // Esperar a que Angular renderice los inputs
+try {
+  await page.waitForSelector('input', { timeout: 15000 });
+} catch(e) {
+  console.log('[SCRAPER] No aparecieron inputs, continuando igual...');
+}
     const inputsInfo = await page.evaluate(() => {
       const inputs = document.querySelectorAll('input');
       return Array.from(inputs).map((inp, idx) => ({
