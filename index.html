@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora de Transferencia · Tutu Automotores</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #f0f2f5;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+  .container { width: 100%; max-width: 560px; }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1.5rem;
+    padding: 10px 16px;
+    background: #1a3a5c;
+    border-radius: 10px;
+  }
+  .topbar .brand { font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.08em; text-transform: uppercase; }
+  .topbar .sep { color: #4a7ab5; }
+  .topbar .sub { font-size: 13px; color: #a0b8cc; }
+
+  h1 { font-size: 22px; font-weight: 700; color: #1a3a5c; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: #666; margin-bottom: 1.25rem; }
+
+  .card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e0e4eb;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .card-label {
+    font-size: 11px; font-weight: 700; color: #999;
+    letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px;
+  }
+
+  .patente-row { display: flex; gap: 10px; }
+  .inp-patente {
+    flex: 1;
+    padding: 14px 16px;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    border: 2px solid #dde2eb;
+    border-radius: 10px;
+    color: #1a3a5c;
+    background: #f8f9fb;
+    transition: border-color 0.2s;
+  }
+  .inp-patente:focus { outline: none; border-color: #1a6dd4; background: #fff; }
+  .inp-patente::placeholder { color: #c5ccd8; font-size: 20px; }
+
+  .btn-primary {
+    padding: 0 24px;
+    background: #1a6dd4;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .btn-primary:hover { background: #1558b0; }
+  .btn-primary:active { transform: scale(0.97); }
+  .btn-primary:disabled { background: #9ab8d8; cursor: not-allowed; }
+
+  /* Estado */
+  .estado { display: none; margin-top: 14px; padding: 12px 16px; border-radius: 10px; font-size: 13px; }
+  .estado.cargando { display: block; background: #eef4ff; color: #1a6dd4; border: 1px solid #bdd4f5; }
+  .estado.error { display: block; background: #fff0f0; color: #c0392b; border: 1px solid #f5c0c0; }
+
+  .progress-steps { margin-top: 10px; }
+  .step { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12px; color: #888; }
+  .step .dot { width: 7px; height: 7px; border-radius: 50%; background: #d0dcea; flex-shrink: 0; transition: all 0.3s; }
+  .step.activo { color: #1a6dd4; font-weight: 600; }
+  .step.activo .dot { background: #1a6dd4; box-shadow: 0 0 0 3px rgba(26,109,212,0.2); }
+  .step.done { color: #1a7a4e; }
+  .step.done .dot { background: #1a7a4e; }
+
+  .spinner-line {
+    display: flex; align-items: center; gap: 10px; font-weight: 600;
+  }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid #bdd4f5; border-top-color: #1a6dd4;
+    border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Resultados */
+  .results { display: none; }
+  .results.show { display: block; animation: up 0.3s ease; }
+  @keyframes up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  .patente-tag {
+    display: inline-block;
+    background: #f0f4fa; border: 1px solid #cdd8ea;
+    border-radius: 6px; padding: 3px 12px;
+    font-size: 14px; font-weight: 800; letter-spacing: 0.15em; color: #1a3a5c;
+    margin-bottom: 16px;
+  }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .metric {
+    background: #f7f9fc; border: 1px solid #eaedf2;
+    border-radius: 10px; padding: 14px;
+  }
+  .metric .ml { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+  .metric .mv { font-size: 20px; font-weight: 700; color: #1a3a5c; }
+  .metric .mv.verde { color: #1a7a4e; }
+
+  .total-box {
+    background: linear-gradient(135deg, #1a3a5c, #1a5cbf);
+    border-radius: 12px; padding: 18px 22px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .total-box .tl { font-size: 14px; color: #a0c0e0; font-weight: 500; }
+  .total-box .tv { font-size: 32px; font-weight: 800; color: #fff; }
+
+  .hint { font-size: 12px; color: #aaa; margin-top: 10px; text-align: center; }
+  .hint a { color: #1a6dd4; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="topbar">
+    <span class="brand">Tutu Automotores</span>
+    <span class="sep">·</span>
+    <span class="sub">Herramientas internas</span>
+  </div>
+
+  <h1>Calculadora de transferencia</h1>
+  <p class="subtitle">Ingresá la patente y calculamos el costo DNRPA automáticamente</p>
+
+  <div class="card">
+    <div class="card-label">Patente del vehículo</div>
+    <div class="patente-row">
+      <input
+        class="inp-patente"
+        id="patente"
+        type="text"
+        placeholder="AB123CD"
+        maxlength="7"
+        oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"
+        onkeydown="if(event.key==='Enter') consultar()"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="btn-primary" id="btnConsultar" onclick="consultar()">
+        Consultar
+      </button>
+    </div>
+
+    <div class="estado cargando" id="estadoCarga">
+      <div class="spinner-line">
+        <div class="spinner"></div>
+        <span>Consultando estimador DNRPA...</span>
+      </div>
+      <div class="progress-steps" id="steps">
+        <div class="step activo" id="s1"><div class="dot"></div> Cargando sitio DNRPA</div>
+        <div class="step" id="s2"><div class="dot"></div> Ingresando patente</div>
+        <div class="step" id="s3"><div class="dot"></div> Calculando aranceles</div>
+        <div class="step" id="s4"><div class="dot"></div> Extrayendo valores</div>
+      </div>
+    </div>
+
+    <div class="estado error" id="estadoError">
+      ⚠ <span id="errorMsg">Error al consultar</span>
+    </div>
+  </div>
+
+  <div class="results card" id="results">
+    <div class="card-label">Resultado DNRPA</div>
+    <div class="patente-tag" id="resPat">—</div>
+    <div class="grid2">
+      <div class="metric">
+        <div class="ml">Costo del trámite</div>
+        <div class="mv" id="resTramite">—</div>
+      </div>
+      <div class="metric">
+        <div class="ml">Valor de tabla</div>
+        <div class="mv" id="resTabla">—</div>
+      </div>
+      <div class="metric">
+        <div class="ml">Sellado (1%)</div>
+        <div class="mv verde" id="resSellado">—</div>
+      </div>
+      <div class="metric">
+        <div class="ml">Hora consulta</div>
+        <div class="mv" style="font-size:15px;color:#555;" id="resHora">—</div>
+      </div>
+    </div>
+    <div class="total-box">
+      <div class="tl">Total transferencia DNRPA</div>
+      <div class="tv" id="resTotal">—</div>
+    </div>
+  </div>
+
+  <p class="hint">
+    ¿No cargó? <a href="https://www2.jus.gob.ar/dnrpa-site/#!/estimador" target="_blank">Abrí el estimador manual →</a>
+  </p>
+
+</div>
+
+<script>
+const API = '';  // mismo origen
+
+function $(id) { return document.getElementById(id); }
+
+function fmt(n) {
+  if (n === null || n === undefined) return '—';
+  return '$' + Math.round(n).toLocaleString('es-AR');
+}
+
+function setPaso(n) {
+  for (let i = 1; i <= 4; i++) {
+    const el = $('s' + i);
+    el.className = 'step' + (i < n ? ' done' : i === n ? ' activo' : '');
+  }
+}
+
+let pasoTimer = null;
+
+async function consultar() {
+  const patente = $('patente').value.trim();
+  if (patente.length < 6) {
+    mostrarError('Ingresá una patente válida (ej: AB123CD o ABC123)');
+    return;
+  }
+
+  const btn = $('btnConsultar');
+  btn.disabled = true;
+  btn.textContent = 'Consultando...';
+  $('estadoCarga').className = 'estado cargando';
+  $('estadoError').className = 'estado';
+  $('results').className = 'results card';
+
+  let paso = 1;
+  setPaso(1);
+  pasoTimer = setInterval(() => { if (paso < 4) setPaso(++paso); }, 4000);
+
+  try {
+    const resp = await fetch(`${API}/api/estimar?patente=${encodeURIComponent(patente)}`);
+    const data = await resp.json();
+
+    clearInterval(pasoTimer);
+    setPaso(4);
+    await new Promise(r => setTimeout(r, 400));
+
+    if (!resp.ok) {
+      mostrarError(data.error || 'Error del servidor');
+      return;
+    }
+
+    $('estadoCarga').className = 'estado';
+    $('resPat').textContent = data.patente;
+    $('resTramite').textContent = fmt(data.costoTramite);
+    $('resTabla').textContent = fmt(data.valorTabla);
+    $('resSellado').textContent = fmt(data.sellado);
+    $('resTotal').textContent = fmt(data.totalDNRPA);
+    $('resHora').textContent = new Date(data.timestamp).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    $('results').className = 'results card show';
+
+  } catch (e) {
+    clearInterval(pasoTimer);
+    mostrarError('No se pudo conectar con el servidor');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Consultar';
+  }
+}
+
+function mostrarError(msg) {
+  $('estadoCarga').className = 'estado';
+  $('errorMsg').textContent = msg;
+  $('estadoError').className = 'estado error';
+}
+</script>
+</body>
+</html>
