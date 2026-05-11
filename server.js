@@ -19,18 +19,22 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/estimar', async (req, res) => {
   const patente = (req.query.patente || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const tramite = req.query.tramite || '08';
+  const tramite = req.query.tramite || 'TRANSFERENCIA';
+  const provincia = req.query.provincia || 'CORDOBA';
+
   if (!patente) return res.status(400).json({ error: 'Falta patente' });
   const formatoViejo = /^[A-Z]{3}\d{3}$/;
   const formatoNuevo = /^[A-Z]{2}\d{3}[A-Z]{2}$/;
   if (!formatoViejo.test(patente) && !formatoNuevo.test(patente)) {
     return res.status(400).json({ error: 'Formato invalido. Ej: ABC123 o AB123CD' });
   }
+
   const cacheKey = patente + '_' + tramite;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     return res.json(cached.data);
   }
+
   console.log('[SCRAPER] Patente: ' + patente);
   let browser;
   try {
@@ -56,13 +60,15 @@ app.get('/api/estimar', async (req, res) => {
     });
     console.log('[SCRAPER] Tramites:', JSON.stringify(opciones));
 
-    // Setear via Angular scope - un solo argumento objeto
+    // Seleccionar TRANSFERENCIA por nombre
     const codigoSeleccionado = await page.evaluate(({ tramiteDeseado, opciones }) => {
       const sel = document.getElementById('codigoTramite');
       const scope = window.angular.element(sel).scope();
-      let codigo = tramiteDeseado;
-      const opcion = opciones.find(o => o.codigo === tramiteDeseado || o.nombre.toLowerCase().includes('transferencia'));
-      if (opcion) codigo = opcion.codigo;
+      const opcion = opciones.find(o =>
+        o.nombre.toUpperCase().includes(tramiteDeseado.toUpperCase()) ||
+        o.nombre.toUpperCase().includes('TRANSFERENCIA')
+      );
+      const codigo = opcion ? opcion.codigo : opciones[0].codigo;
       scope.estimadorCtrl.codigoTramite = codigo;
       scope.$apply();
       return codigo;
@@ -75,79 +81,113 @@ app.get('/api/estimar', async (req, res) => {
     console.log('[SCRAPER] Click Continuar');
     await page.waitForTimeout(5000);
 
+    // Esperar inputs visibles
     await page.waitForFunction(() => {
-      const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"])'));
-      return inputs.filter(i => i.offsetParent !== null).length > 0;
+      return Array.from(document.querySelectorAll('input:not([type="hidden"])')).filter(i => i.offsetParent !== null).length > 0;
     }, { timeout: 15000 });
 
-    const inputs = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('input')).map(i => ({
-        id: i.id, name: i.name, placeholder: i.placeholder,
-        type: i.type, ngModel: i.getAttribute('ng-model'),
-        visible: i.offsetParent !== null
-      }));
-    });
-    console.log('[SCRAPER] Inputs:', JSON.stringify(inputs));
-
-    let patenteSelector = null;
-    for (const inp of inputs) {
-      if (!inp.visible) continue;
-      const txt = [inp.id, inp.name, inp.placeholder, inp.ngModel].join(' ').toLowerCase();
-      if (txt.includes('dominio') || txt.includes('patente') || txt.includes('placa')) {
-        patenteSelector = inp.id ? '#' + inp.id : inp.name ? 'input[name="' + inp.name + '"]' : inp.ngModel ? 'input[ng-model="' + inp.ngModel + '"]' : null;
-        break;
-      }
-    }
-    if (!patenteSelector) {
-      const v = inputs.filter(i => i.visible && i.type !== 'hidden');
-      if (v.length > 0) {
-        const i = v[0];
-        patenteSelector = i.id ? '#' + i.id : i.name ? 'input[name="' + i.name + '"]' : null;
-      }
-    }
-    if (!patenteSelector) throw new Error('No se encontro campo de patente');
-
-    await page.fill(patenteSelector, patente);
+    // Ingresar patente en campo dominio
+    await page.fill('#dominio', patente);
+    console.log('[SCRAPER] Patente ingresada en #dominio');
     await page.keyboard.press('Tab');
     await page.waitForTimeout(1500);
 
-    const inputs2 = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('input')).map(i => ({
-        id: i.id, name: i.name, placeholder: i.placeholder,
-        type: i.type, ngModel: i.getAttribute('ng-model'),
-        visible: i.offsetParent !== null, value: i.value
-      }));
+    // Ingresar valor declarado = 1
+    await page.fill('input[name="valorDeclarado"]', '1');
+    console.log('[SCRAPER] Valor declarado = 1');
+    await page.waitForTimeout(1000);
+
+    // Seleccionar provincia via Angular scope
+    const provinciaOk = await page.evaluate(({ provinciaDeseada }) => {
+      // Buscar el select de provincia
+      const selects = document.querySelectorAll('select');
+      for (const sel of selects) {
+        if (sel.id === 'codigoTramite') continue;
+        const scope = window.angular.element(sel).scope();
+        if (!scope) continue;
+        const ctrl = scope.estimadorCtrl;
+        if (!ctrl) continue;
+
+        // Buscar la propiedad que tiene las provincias
+        const keys = Object.keys(ctrl);
+        for (const key of keys) {
+          const val = ctrl[key];
+          if (Array.isArray(val) && val.length > 5) {
+            const sample = val[0];
+            if (sample && (sample.NombreProvincia || sample.nombre || sample.Nombre)) {
+              console.log('Provincias encontradas en:', key, JSON.stringify(val.slice(0,3)));
+              // Buscar Córdoba
+              const prov = val.find(p =>
+                (p.NombreProvincia || p.nombre || p.Nombre || '').toUpperCase().includes(provinciaDeseada.toUpperCase())
+              );
+              if (prov) {
+                const codigoProv = prov.CodigoProvincia || prov.codigo || prov.Codigo || prov.id;
+                // Setear en el scope
+                const ngModel = sel.getAttribute('ng-model');
+                if (ngModel) {
+                  const parts = ngModel.split('.');
+                  if (parts.length === 2) ctrl[parts[1]] = codigoProv;
+                  scope.$apply();
+                  return { ok: true, provincia: prov, key };
+                }
+              }
+            }
+          }
+        }
+      }
+      return { ok: false };
+    }, { provinciaDeseada: provincia });
+
+    console.log('[SCRAPER] Provincia resultado:', JSON.stringify(provinciaOk));
+
+    // Si no funcionó Angular, intentar con selectOption directo
+    if (!provinciaOk.ok) {
+      const selects = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('select')).map(s => ({
+          id: s.id, name: s.name, ngModel: s.getAttribute('ng-model'),
+          options: Array.from(s.options).slice(0, 5).map(o => ({ v: o.value, t: o.text }))
+        }));
+      });
+      console.log('[SCRAPER] Selects disponibles:', JSON.stringify(selects));
+
+      // Intentar seleccionar Córdoba en cualquier select que no sea codigoTramite
+      for (const sel of selects) {
+        if (sel.id === 'codigoTramite') continue;
+        try {
+          const selector = sel.id ? '#' + sel.id : sel.name ? 'select[name="' + sel.name + '"]' : 'select:not(#codigoTramite)';
+          await page.selectOption(selector, { label: /c.rdoba/i });
+          console.log('[SCRAPER] Provincia seleccionada con selectOption en:', selector);
+          break;
+        } catch (e) {
+          console.log('[SCRAPER] selectOption falló:', e.message);
+        }
+      }
+    }
+
+    await page.waitForTimeout(1000);
+
+    // Submit
+    const btnSubmit = await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('button'));
+      return btns.map(b => ({ text: b.textContent.trim(), visible: b.offsetParent !== null }));
     });
+    console.log('[SCRAPER] Botones antes submit:', JSON.stringify(btnSubmit));
 
-    let valorSelector = null;
-    for (const inp of inputs2) {
-      if (!inp.visible) continue;
-      const txt = [inp.id, inp.name, inp.placeholder, inp.ngModel].join(' ').toLowerCase();
-      if (txt.includes('valor') || txt.includes('monto') || txt.includes('precio') || txt.includes('importe')) {
-        valorSelector = inp.id ? '#' + inp.id : inp.name ? 'input[name="' + inp.name + '"]' : inp.ngModel ? 'input[ng-model="' + inp.ngModel + '"]' : null;
-        break;
+    try {
+      await page.click('button:has-text("Calcular")');
+    } catch(e) {
+      try { await page.click('button[type="submit"]'); } catch(e2) {
+        await page.keyboard.press('Enter');
       }
     }
-    if (!valorSelector) {
-      const v = inputs2.filter(i => i.visible && i.type !== 'hidden' && !i.value);
-      if (v.length > 1) {
-        const i = v[1];
-        valorSelector = i.id ? '#' + i.id : i.name ? 'input[name="' + i.name + '"]' : null;
-      }
-    }
-    if (valorSelector) {
-      await page.fill(valorSelector, '1');
-      console.log('[SCRAPER] Valor en:', valorSelector);
-    }
-
-    await page.keyboard.press('Enter');
+    console.log('[SCRAPER] Submit enviado');
     await page.waitForTimeout(8000);
 
     const resultado = await page.evaluate(() => {
       const texto = document.body.innerText;
       const extraerMonto = (texto, keywords) => {
         for (const kw of keywords) {
-          const regex = new RegExp(kw + '[^\\d$\\n]{0,30}\\$?\\s*([\\d.]+,[\\d]{2})', 'i');
+          const regex = new RegExp(kw + '[^\\d$\\n]{0,50}\\$?\\s*([\\d.]+,[\\d]{2})', 'i');
           const match = texto.match(regex);
           if (match) {
             const num = parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
@@ -156,15 +196,15 @@ app.get('/api/estimar', async (req, res) => {
         }
         return null;
       };
-      const costoTramite = extraerMonto(texto, ['costo del tr', 'total a abonar', 'arancel']);
-      const valorTabla = extraerMonto(texto, ['valor de tabla', 'valor tabla', 'valuaci', 'valor fiscal', 'precio de referencia']);
+      const costoTramite = extraerMonto(texto, ['costo del tr', 'total a abonar', 'arancel', 'importe']);
+      const valorTabla = extraerMonto(texto, ['valor de tabla', 'valor tabla', 'valuaci', 'valor fiscal', 'precio de referencia', 'tabla']);
       const re = /\$\s*([\d.]+,\d{2})/g;
       const todosMontos = [];
       let m;
       while ((m = re.exec(texto)) !== null) {
         todosMontos.push(parseFloat(m[1].replace(/\./g, '').replace(',', '.')));
       }
-      return { costoTramite, valorTabla, todosMontos, texto: texto.substring(0, 4000) };
+      return { costoTramite, valorTabla, todosMontos, texto: texto.substring(0, 5000) };
     });
 
     console.log('[SCRAPER] costoTramite:', resultado.costoTramite);
@@ -191,6 +231,7 @@ app.get('/api/estimar', async (req, res) => {
       timestamp: new Date().toISOString()
     };
     cache.set(cacheKey, { data: respuesta, timestamp: Date.now() });
+    console.log('[SCRAPER] OK:', respuesta);
     res.json(respuesta);
 
   } catch (err) {
