@@ -40,6 +40,7 @@ app.get('/api/estimar', async (req, res) => {
     });
     const page = await browser.newPage();
     await page.goto('https://www2.jus.gob.ar/dnrpa-site/#!/estimador', { waitUntil: 'networkidle', timeout: 45000 });
+
     console.log('[SCRAPER] Esperando Angular...');
     await page.waitForFunction(() => {
       const sel = document.getElementById('codigoTramite');
@@ -47,13 +48,16 @@ app.get('/api/estimar', async (req, res) => {
       const scope = window.angular && window.angular.element(sel).scope();
       return scope && scope.estimadorCtrl && scope.estimadorCtrl.tiposTramites && scope.estimadorCtrl.tiposTramites.length > 0;
     }, { timeout: 25000 });
+
     const opciones = await page.evaluate(() => {
       const sel = document.getElementById('codigoTramite');
       const scope = window.angular.element(sel).scope();
       return scope.estimadorCtrl.tiposTramites.map(t => ({ codigo: t.CodigoTramite, nombre: t.NombreTramite }));
     });
     console.log('[SCRAPER] Tramites:', JSON.stringify(opciones));
-    const codigoSeleccionado = await page.evaluate((tramiteDeseado, opciones) => {
+
+    // Setear via Angular scope - un solo argumento objeto
+    const codigoSeleccionado = await page.evaluate(({ tramiteDeseado, opciones }) => {
       const sel = document.getElementById('codigoTramite');
       const scope = window.angular.element(sel).scope();
       let codigo = tramiteDeseado;
@@ -62,16 +66,20 @@ app.get('/api/estimar', async (req, res) => {
       scope.estimadorCtrl.codigoTramite = codigo;
       scope.$apply();
       return codigo;
-    }, tramite, opciones);
+    }, { tramiteDeseado: tramite, opciones });
+
     console.log('[SCRAPER] Tramite seteado:', codigoSeleccionado);
     await page.waitForTimeout(2000);
+
     await page.click('button:has-text("Continuar")');
     console.log('[SCRAPER] Click Continuar');
     await page.waitForTimeout(5000);
+
     await page.waitForFunction(() => {
       const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"])'));
       return inputs.filter(i => i.offsetParent !== null).length > 0;
     }, { timeout: 15000 });
+
     const inputs = await page.evaluate(() => {
       return Array.from(document.querySelectorAll('input')).map(i => ({
         id: i.id, name: i.name, placeholder: i.placeholder,
@@ -80,6 +88,7 @@ app.get('/api/estimar', async (req, res) => {
       }));
     });
     console.log('[SCRAPER] Inputs:', JSON.stringify(inputs));
+
     let patenteSelector = null;
     for (const inp of inputs) {
       if (!inp.visible) continue;
@@ -91,12 +100,17 @@ app.get('/api/estimar', async (req, res) => {
     }
     if (!patenteSelector) {
       const v = inputs.filter(i => i.visible && i.type !== 'hidden');
-      if (v.length > 0) { const i = v[0]; patenteSelector = i.id ? '#' + i.id : i.name ? 'input[name="' + i.name + '"]' : null; }
+      if (v.length > 0) {
+        const i = v[0];
+        patenteSelector = i.id ? '#' + i.id : i.name ? 'input[name="' + i.name + '"]' : null;
+      }
     }
     if (!patenteSelector) throw new Error('No se encontro campo de patente');
+
     await page.fill(patenteSelector, patente);
     await page.keyboard.press('Tab');
     await page.waitForTimeout(1500);
+
     const inputs2 = await page.evaluate(() => {
       return Array.from(document.querySelectorAll('input')).map(i => ({
         id: i.id, name: i.name, placeholder: i.placeholder,
@@ -104,6 +118,7 @@ app.get('/api/estimar', async (req, res) => {
         visible: i.offsetParent !== null, value: i.value
       }));
     });
+
     let valorSelector = null;
     for (const inp of inputs2) {
       if (!inp.visible) continue;
@@ -115,18 +130,29 @@ app.get('/api/estimar', async (req, res) => {
     }
     if (!valorSelector) {
       const v = inputs2.filter(i => i.visible && i.type !== 'hidden' && !i.value);
-      if (v.length > 1) { const i = v[1]; valorSelector = i.id ? '#' + i.id : i.name ? 'input[name="' + i.name + '"]' : null; }
+      if (v.length > 1) {
+        const i = v[1];
+        valorSelector = i.id ? '#' + i.id : i.name ? 'input[name="' + i.name + '"]' : null;
+      }
     }
-    if (valorSelector) { await page.fill(valorSelector, '1'); console.log('[SCRAPER] Valor en:', valorSelector); }
+    if (valorSelector) {
+      await page.fill(valorSelector, '1');
+      console.log('[SCRAPER] Valor en:', valorSelector);
+    }
+
     await page.keyboard.press('Enter');
     await page.waitForTimeout(8000);
+
     const resultado = await page.evaluate(() => {
       const texto = document.body.innerText;
       const extraerMonto = (texto, keywords) => {
         for (const kw of keywords) {
           const regex = new RegExp(kw + '[^\\d$\\n]{0,30}\\$?\\s*([\\d.]+,[\\d]{2})', 'i');
           const match = texto.match(regex);
-          if (match) { const num = parseFloat(match[1].replace(/\./g, '').replace(',', '.')); if (!isNaN(num) && num > 0) return num; }
+          if (match) {
+            const num = parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
+            if (!isNaN(num) && num > 0) return num;
+          }
         }
         return null;
       };
@@ -135,19 +161,38 @@ app.get('/api/estimar', async (req, res) => {
       const re = /\$\s*([\d.]+,\d{2})/g;
       const todosMontos = [];
       let m;
-      while ((m = re.exec(texto)) !== null) { todosMontos.push(parseFloat(m[1].replace(/\./g, '').replace(',', '.'))); }
+      while ((m = re.exec(texto)) !== null) {
+        todosMontos.push(parseFloat(m[1].replace(/\./g, '').replace(',', '.')));
+      }
       return { costoTramite, valorTabla, todosMontos, texto: texto.substring(0, 4000) };
     });
-    console.log('[SCRAPER] Resultado:', resultado.costoTramite, resultado.valorTabla, resultado.todosMontos);
+
+    console.log('[SCRAPER] costoTramite:', resultado.costoTramite);
+    console.log('[SCRAPER] valorTabla:', resultado.valorTabla);
+    console.log('[SCRAPER] Montos:', resultado.todosMontos);
     console.log('[SCRAPER] Texto:', resultado.texto);
+
     await browser.close();
+
     if (!resultado.costoTramite && !resultado.valorTabla) {
-      return res.status(422).json({ error: 'No se pudieron extraer los valores', debug: { texto: resultado.texto, montos: resultado.todosMontos } });
+      return res.status(422).json({
+        error: 'No se pudieron extraer los valores',
+        debug: { texto: resultado.texto, montos: resultado.todosMontos }
+      });
     }
+
     const sellado = resultado.valorTabla ? resultado.valorTabla * 0.01 : 0;
-    const respuesta = { patente, tramite, costoTramite: resultado.costoTramite, valorTabla: resultado.valorTabla, sellado: Math.round(sellado), totalDNRPA: Math.round((resultado.costoTramite || 0) + sellado), timestamp: new Date().toISOString() };
+    const respuesta = {
+      patente, tramite,
+      costoTramite: resultado.costoTramite,
+      valorTabla: resultado.valorTabla,
+      sellado: Math.round(sellado),
+      totalDNRPA: Math.round((resultado.costoTramite || 0) + sellado),
+      timestamp: new Date().toISOString()
+    };
     cache.set(cacheKey, { data: respuesta, timestamp: Date.now() });
     res.json(respuesta);
+
   } catch (err) {
     console.error('[SCRAPER] Error:', err.message);
     if (browser) await browser.close().catch(() => {});
