@@ -52,7 +52,7 @@ app.get('/api/estimar', async (req, res) => {
       return scope && scope.estimadorCtrl && scope.estimadorCtrl.tiposTramites && scope.estimadorCtrl.tiposTramites.length > 0;
     }, { timeout: 25000 });
 
-    // Seleccionar TRANSFERENCIA via Angular scope
+    // Seleccionar TRANSFERENCIA via Angular
     const opciones = await page.evaluate(() => {
       const sel = document.getElementById('codigoTramite');
       const scope = window.angular.element(sel).scope();
@@ -67,82 +67,88 @@ app.get('/api/estimar', async (req, res) => {
       scope.$apply();
     }, { opciones });
 
-    console.log('[SCRAPER] Tramite seteado: TRANSFERENCIA');
     await page.waitForTimeout(2000);
-
     await page.click('button:has-text("Continuar")');
-    console.log('[SCRAPER] Click Continuar');
+    console.log('[SCRAPER] Click Continuar paso 1');
     await page.waitForTimeout(5000);
 
-    // Esperar inputs visibles
     await page.waitForFunction(() => {
       return Array.from(document.querySelectorAll('input:not([type="hidden"])')).filter(i => i.offsetParent !== null).length > 0;
     }, { timeout: 15000 });
 
-    // Ingresar patente
-    await page.fill('#dominio', patente);
-    console.log('[SCRAPER] Patente en #dominio');
-    await page.waitForTimeout(500);
+    // Setear todos los valores via Angular scope de una sola vez
+    const setupOk = await page.evaluate(({ patenteVal }) => {
+      const dominio = document.getElementById('dominio');
+      if (!dominio) return { ok: false, error: 'no dominio' };
+      const scope = window.angular.element(dominio).scope();
+      if (!scope || !scope.estimadorCtrl) return { ok: false, error: 'no scope' };
+      const ctrl = scope.estimadorCtrl;
 
-    // Ingresar valor declarado
-    await page.fill('input[name="valorDeclarado"]', '1');
-    console.log('[SCRAPER] Valor declarado = 1');
-    await page.waitForTimeout(500);
+      // Setear patente
+      ctrl.dominio = patenteVal;
 
-    // Seleccionar provincia CORDOBA via Angular scope directo
-    const provOk = await page.evaluate(() => {
-      const sel = document.getElementById('codigoProvincia');
-      if (!sel) return { ok: false, error: 'No existe #codigoProvincia' };
+      // Setear valor declarado
+      ctrl.valorDeclarado = 1;
 
-      // Ver todas las opciones del select
-      const todasOpciones = Array.from(sel.options).map(o => ({ value: o.value, text: o.text.trim() }));
-      console.log('Opciones provincia:', JSON.stringify(todasOpciones));
+      // Setear provincia Córdoba (código X)
+      ctrl.codigoProvincia = 'X';
 
-      // Buscar Córdoba
-      const optCordoba = todasOpciones.find(o => o.text.toUpperCase().includes('CORDOBA') || o.text.toUpperCase().includes('CÓRDOBA'));
-      if (!optCordoba) return { ok: false, error: 'No encontre Cordoba', opciones: todasOpciones };
+      scope.$apply();
 
-      // Setear valor del select nativo
-      sel.value = optCordoba.value;
+      return {
+        ok: true,
+        dominio: ctrl.dominio,
+        valorDeclarado: ctrl.valorDeclarado,
+        codigoProvincia: ctrl.codigoProvincia
+      };
+    }, { patenteVal: patente });
 
-      // Disparar evento change para que Angular lo detecte
-      const event = new Event('change');
-      sel.dispatchEvent(event);
-
-      // También via Angular scope
-      const scope = window.angular.element(sel).scope();
-      if (scope && scope.estimadorCtrl) {
-        // Extraer el codigo limpio (sin "string:")
-        const codigoLimpio = optCordoba.value.replace('string:', '');
-        scope.estimadorCtrl.codigoProvincia = codigoLimpio;
-        scope.$apply();
-      }
-
-      return { ok: true, seleccionado: optCordoba };
-    });
-
-    console.log('[SCRAPER] Provincia:', JSON.stringify(provOk));
+    console.log('[SCRAPER] Setup Angular:', JSON.stringify(setupOk));
     await page.waitForTimeout(1500);
 
-    // Verificar que no haya errores de validación y hacer submit
-    await page.evaluate(() => {
-      // Forzar que el form sea válido tocando todos los campos
-      const inputs = document.querySelectorAll('input, select');
-      inputs.forEach(el => {
-        el.dispatchEvent(new Event('blur'));
-        el.dispatchEvent(new Event('change'));
-      });
-    });
-    await page.waitForTimeout(500);
+    // Llamar directamente la función submit del controlador Angular
+    const submitOk = await page.evaluate(() => {
+      const dominio = document.getElementById('dominio');
+      const scope = window.angular.element(dominio).scope();
+      const ctrl = scope.estimadorCtrl;
 
-    // Click en Continuar (que es el botón de submit del segundo paso)
-    await page.click('button:has-text("Continuar")');
-    console.log('[SCRAPER] Submit enviado');
+      // Ver qué funciones tiene el controlador
+      const funciones = Object.keys(ctrl).filter(k => typeof ctrl[k] === 'function');
+      console.log('Funciones del ctrl:', funciones.join(', '));
+
+      // Intentar llamar submit directamente
+      if (typeof ctrl.submit === 'function') {
+        ctrl.submit();
+        scope.$apply();
+        return { ok: true, metodo: 'ctrl.submit()' };
+      }
+      if (typeof ctrl.calcular === 'function') {
+        ctrl.calcular();
+        scope.$apply();
+        return { ok: true, metodo: 'ctrl.calcular()' };
+      }
+      if (typeof ctrl.consultar === 'function') {
+        ctrl.consultar();
+        scope.$apply();
+        return { ok: true, metodo: 'ctrl.consultar()' };
+      }
+
+      // Disparar ng-submit del form
+      const form = document.querySelector('form[name="estimadorCtrl.form"]');
+      if (form) {
+        const event = new Event('submit', { bubbles: true, cancelable: true });
+        form.dispatchEvent(event);
+        return { ok: true, metodo: 'form submit event', funciones };
+      }
+
+      return { ok: false, funciones };
+    });
+
+    console.log('[SCRAPER] Submit:', JSON.stringify(submitOk));
     await page.waitForTimeout(8000);
 
     const resultado = await page.evaluate(() => {
       const texto = document.body.innerText;
-      console.log('TEXTO COMPLETO:', texto);
 
       const extraerMonto = (texto, keywords) => {
         for (const kw of keywords) {
@@ -171,7 +177,7 @@ app.get('/api/estimar', async (req, res) => {
     console.log('[SCRAPER] costoTramite:', resultado.costoTramite);
     console.log('[SCRAPER] valorTabla:', resultado.valorTabla);
     console.log('[SCRAPER] Montos:', resultado.todosMontos);
-    console.log('[SCRAPER] Texto final:', resultado.texto);
+    console.log('[SCRAPER] Texto:', resultado.texto);
 
     await browser.close();
 
