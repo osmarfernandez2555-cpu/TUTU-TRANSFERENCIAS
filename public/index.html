@@ -20,14 +20,14 @@
   .paso-ind { flex: 1; height: 4px; border-radius: 2px; background: #e0e4eb; transition: background 0.3s; }
   .paso-ind.activo { background: #1a6dd4; }
   .paso-ind.done { background: #1a7a4e; }
-  .inp-patente { width: 100%; padding: 14px 16px; font-size: 26px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; border: 2px solid #dde2eb; border-radius: 10px; color: #1a3a5c; background: #f8f9fb; transition: border-color 0.2s; }
+  .inp-patente { width: 100%; padding: 14px 16px; font-size: 26px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; border: 2px solid #dde2eb; border-radius: 10px; color: #1a3a5c; background: #f8f9fb; transition: border-color 0.2s; margin-bottom: 12px; }
   .inp-patente:focus { outline: none; border-color: #1a6dd4; background: #fff; }
   .inp-patente::placeholder { color: #c5ccd8; font-size: 20px; }
   .inp-num { width: 100%; padding: 11px 14px; font-size: 18px; font-weight: 600; border: 2px solid #dde2eb; border-radius: 10px; color: #1a3a5c; background: #f8f9fb; transition: border-color 0.2s; }
   .inp-num:focus { outline: none; border-color: #1a6dd4; background: #fff; }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .field-label { font-size: 12px; color: #666; margin-bottom: 6px; font-weight: 500; }
-  .btn { width: 100%; padding: 13px; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.15s; margin-top: 12px; }
+  .btn { display: block; width: 100%; padding: 13px; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.15s; margin-top: 12px; text-align: center; text-decoration: none; }
   .btn-blue { background: #1a6dd4; color: #fff; }
   .btn-blue:hover { background: #1558b0; }
   .btn-green { background: #1a7a4e; color: #fff; }
@@ -37,7 +37,7 @@
   .step { display: none; }
   .step.show { display: block; animation: up 0.25s ease; }
   @keyframes up { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
-  .instruccion { background: #eef4ff; border: 1px solid #c0d8f5; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #1a4a8a; margin-bottom: 14px; line-height: 1.7; }
+  .instruccion { background: #eef4ff; border: 1px solid #c0d8f5; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #1a4a8a; line-height: 1.7; }
   .instruccion b { color: #1a3a5c; }
   .num-step { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: #1a6dd4; color: #fff; border-radius: 50%; font-size: 11px; font-weight: 700; margin-right: 4px; }
   .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
@@ -49,8 +49,8 @@
   .total-box .tl { font-size: 14px; color: #a0c0e0; font-weight: 500; }
   .total-box .tv { font-size: 30px; font-weight: 800; color: #fff; }
   .pat-tag { display: inline-block; background: #f0f4fa; border: 1px solid #cdd8ea; border-radius: 6px; padding: 3px 12px; font-size: 14px; font-weight: 800; letter-spacing: 0.15em; color: #1a3a5c; margin-bottom: 14px; }
-  .link-dnrpa { display: block; text-align: center; margin-top: 10px; font-size: 13px; color: #1a6dd4; text-decoration: none; }
-  .link-dnrpa:hover { text-decoration: underline; }
+  .link-volver { display: block; text-align: center; margin-top: 10px; font-size: 13px; color: #1a6dd4; text-decoration: none; }
+  .link-volver:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -77,9 +77,14 @@
       <div class="card-label">Paso 1 · Patente del vehículo</div>
       <input class="inp-patente" id="patente" type="text" placeholder="AB123CD" maxlength="7"
         oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"
-        onkeydown="if(event.key==='Enter') irAlDNRPA()"
         autocomplete="off" spellcheck="false" />
-      <button class="btn btn-blue" onclick="irAlDNRPA()">Abrir estimador DNRPA ↗</button>
+      <a class="btn btn-blue"
+         href="https://www2.jus.gob.ar/dnrpa-site/#!/estimador"
+         target="_blank"
+         rel="noopener noreferrer"
+         onclick="return guardarPatente()">
+        Abrir estimador DNRPA ↗
+      </a>
     </div>
     <div class="card">
       <div class="card-label">¿Cómo usar?</div>
@@ -87,7 +92,7 @@
         <div style="margin-bottom:6px;"><span class="num-step">1</span> Ingresá la patente y hacé click en <b>Abrir estimador DNRPA</b></div>
         <div style="margin-bottom:6px;"><span class="num-step">2</span> En el sitio: seleccioná <b>Transferencia</b> → Continuar</div>
         <div style="margin-bottom:6px;"><span class="num-step">3</span> Completá <b>Valor declarado = 1</b> y provincia <b>Córdoba</b> → Continuar</div>
-        <div><span class="num-step">4</span> Copiá los dos valores que te da el sitio y pegálos en el paso 2</div>
+        <div><span class="num-step">4</span> Copiá los dos valores y volvé a esta pantalla</div>
       </div>
     </div>
   </div>
@@ -109,7 +114,7 @@
       </div>
       <button class="btn btn-green" onclick="irPaso3()">Ver resultado →</button>
       <button class="btn btn-outline" onclick="irPaso1()" style="margin-top:8px;">← Cambiar patente</button>
-      <a class="link-dnrpa" href="https://www2.jus.gob.ar/dnrpa-site/#!/estimador" target="_blank" rel="noopener noreferrer">Volver a abrir el estimador DNRPA ↗</a>
+      <a class="link-volver" href="https://www2.jus.gob.ar/dnrpa-site/#!/estimador" target="_blank" rel="noopener noreferrer">Volver a abrir el estimador DNRPA ↗</a>
     </div>
   </div>
 
@@ -156,19 +161,16 @@ function setPasos(paso) {
   }
 }
 
-function irAlDNRPA() {
+function guardarPatente() {
   const patente = $('patente').value.trim();
-  if (patente.length < 6) { alert('Ingresá una patente válida'); return; }
-  const a = document.createElement('a');
-  a.href = 'https://www2.jus.gob.ar/dnrpa-site/#!/estimador';
-  a.target = '_blank';
-  a.rel = 'noopener noreferrer';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  if (!patente || patente.length < 6) {
+    alert('Ingresá una patente válida');
+    return false;
+  }
   $('patTag').textContent = patente;
   $('patTag2').textContent = patente;
-  setPasos(2);
+  setTimeout(() => setPasos(2), 200);
+  return true;
 }
 
 function irPaso1() {
